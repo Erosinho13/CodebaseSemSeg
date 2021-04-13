@@ -734,19 +734,18 @@ class ColorJitter(object):
         return format_string
     
 
-class RandomResizeCrop(object):
+class RandomResizeRandomCrop(object):
 
-    def __init__(self, crop_size=(1024, 512), scale=(0.75, 1.0, 1.25, 1.5, 1.75, 2.0)):
+    def __init__(self, crop_size=(512, 1024), scale=(0.75, 1.0, 1.25, 1.5, 1.75, 2.0)):
         self.crop_size = crop_size
         self.scale = scale
 
     def __call__(self, img, lbl=None):
         scale = self.scale[(torch.ones(len(self.scale))/len(self.scale)).multinomial(num_samples=1)]
-        rsize = (torch.Tensor(img.size)*scale).int()
-        rsize = (rsize[1].item(), rsize[0].item())
-        csize = (int(self.crop_size[1]/scale), int(self.crop_size[0]/scale))
+        tr = Compose([
+            RandomScale((scale, scale)),
+            RandomCrop((512, 1024))
+        ])
         if lbl is not None:
-            crops = RandomCrop(csize)(img, lbl)
-            return Resize(self.crop_size)(crops[0]), Resize(self.crop_size)(crops[1])
-        else:
-            return Resize(self.crop_size)(RandomCrop(csize)(img))
+            return tr(img, lbl)
+        return tr(img)

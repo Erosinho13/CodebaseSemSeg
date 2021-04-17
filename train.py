@@ -64,11 +64,13 @@ class Trainer:
         scheduler = self.scheduler
         logger = self.logger
 
-        print("Epoch %d, lr = %f" % (cur_epoch, optim.param_groups[0]['lr']))
+        print("Epoch %d, lr = %f" % (cur_epoch+1, optim.param_groups[0]['lr']))
 
         epoch_loss = 0.0
+        epoch_boost_loss = 0.0
         reg_loss = 0.0
         interval_loss = 0.0
+        interval_boost_loss = 0.0
         l_reg = torch.tensor(0.)
 
         train_loader.sampler.set_epoch(cur_epoch)
@@ -89,21 +91,23 @@ class Trainer:
 #                 print(outputs.shape, feat2.shape, feat3.shape, feat4.shape, feat5_4.shape, labels.shape)
 #                 quit()
                 
-                out_loss = self.reduction(self.criterion(outputs, labels), labels)
+                loss = self.reduction(self.criterion(outputs, labels), labels)
+                
                 feat2loss = self.reduction(self.criterion(feat2, labels), labels)
                 feat3loss = self.reduction(self.criterion(feat3, labels), labels)
                 feat4loss = self.reduction(self.criterion(feat4, labels), labels)
                 feat5_4loss = self.reduction(self.criterion(feat5_4, labels), labels)
+                boost_loss = feat2loss + feat3loss + feat4loss + feat5_4loss
                 
-                loss = out_loss + feat2loss + feat3loss + feat4loss + feat5_4loss
+                loss_tot = loss + boost_loss + reg_loss 
             
             else:
                 outputs = model(images)
 
                 # xxx Cross Entropy Loss
                 loss = self.reduction(self.criterion(outputs, labels), labels)  # B x H x W
-            
-            loss_tot = loss + reg_loss    
+                loss_tot = loss + reg_loss
+                
             loss_tot.backward()
 
             optim.step()
@@ -111,10 +115,16 @@ class Trainer:
                 scheduler.step()
 
             epoch_loss += loss.item()
+            if self.opts.output_aux and self.opts.model == 'bisenetv2':
+                epoch_boost_loss += boost_loss.item()
+            
             reg_loss += l_reg.item() if l_reg != 0. else 0.
+            
             interval_loss += loss.item()
             interval_loss += l_reg.item() if l_reg != 0. else 0.
-
+            if self.opts.output_aux and self.opts.model == 'bisenetv2':
+                interval_boost_loss += boost_loss.item()
+            
             _, prediction = outputs.max(dim=1)  # B, H, W
             labels = labels.cpu().numpy()
             prediction = prediction.cpu().numpy()
@@ -123,13 +133,24 @@ class Trainer:
 
             if (cur_step + 1) % print_int == 0:
                 interval_loss = interval_loss / print_int
-                print(f"Epoch {cur_epoch}, Batch {cur_step + 1}/{len(train_loader)},"
-                            f" Loss={interval_loss}")
+                
+                if self.opts.output_aux and self.opts.model == 'bisenetv2':
+                    interval_boost_loss = interval_boost_loss / print_int
+                    print(f"Epoch {cur_epoch+1}, Batch {cur_step + 1}/{len(train_loader)},", end=' ')
+                    print(f"Loss={round(interval_loss, 3)}, Boost_loss={round(interval_boost_loss, 3)},", end=' ')
+                    print(f"Tot_loss={round(interval_loss + interval_boost_loss, 3)}")
+                else:
+                    print(f"Epoch {cur_epoch+1}, Batch {cur_step + 1}/{len(train_loader)},"
+                          f" Loss={interval_loss}")
 #                 print(f"Loss made of: CE {loss}, LRec {l_reg}")
                 # visualization
                 if logger is not None:
                     x = cur_epoch * len(train_loader) + cur_step + 1
                     logger.add_scalar('Loss', interval_loss, x)
+                    if self.opts.output_aux and self.opts.model == 'bisenetv2':
+                        logger.add_scalar('Boost Loss', interval_boost_loss, x)
+                        interval_boost_loss = 0.0
+                        
                 interval_loss = 0.0
 
         # collect statistics from multiple processes
@@ -139,6 +160,12 @@ class Trainer:
         torch.distributed.reduce(epoch_loss, dst=0)
         torch.distributed.reduce(reg_loss, dst=0)
 
+        if self.opts.output_aux and self.opts.model == 'bisenetv2':
+            epoch_boost_loss = torch.tensor(epoch_boost_loss).to(self.device)
+            torch.distributed.reduce(epoch_boost_loss, dst=0)
+            if distributed.get_rank() == 0:
+                epoch_boost_loss = epoch_boost_loss / distributed.get_world_size() / len(train_loader)
+            
         if distributed.get_rank() == 0:
             epoch_loss = epoch_loss / distributed.get_world_size() / len(train_loader)
             reg_loss = reg_loss / distributed.get_world_size() / len(train_loader)
@@ -147,7 +174,11 @@ class Trainer:
         if metrics is not None:
             metrics.synch(device)
 
-        print(f"Epoch {cur_epoch}, Class Loss={epoch_loss}, Reg Loss={reg_loss}")
+        if self.opts.output_aux and self.opts.model == 'bisenetv2':
+            print(f"Epoch {cur_epoch+1}, Class Loss={epoch_loss}, Boost Loss={epoch_boost_loss}, Reg Loss={reg_loss}")
+            return epoch_loss, epoch_boost_loss, reg_loss
+        else:
+            print(f"Epoch {cur_epoch+1}, Class Loss={epoch_loss}, Reg Loss={reg_loss}")
 
         return epoch_loss, reg_loss
 

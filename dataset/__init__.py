@@ -70,6 +70,9 @@ def get_dataset(opts, train=True):
                 Normalize(mean=[0.485, 0.456, 0.406],
                           std=[0.229, 0.224, 0.225]),
             ])
+            print(train_transform)
+            print(val_transform)
+            print(test_transform)
         else:
             train_transform = Compose([
                 RandomScale((0.7, 2)),  # Using RRC should be (0.25, 0.75)

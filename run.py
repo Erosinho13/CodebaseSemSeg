@@ -148,13 +148,23 @@ def main(opts):
         end = time.time()
 
         len_ep = int(end - start)
-        print(f"End of Epoch {cur_epoch}/{opts.epochs}, Average Loss={epoch_loss[0] + epoch_loss[1]:.4f}, "
-                    f"Class Loss={epoch_loss[0]:.4f}, Reg Loss={epoch_loss[1]}\n"
-                    f"Train_Acc={train_score['Overall Acc']:.4f}, Train_Iou={train_score['Mean IoU']:.4f} "
-                    f"\n -- time: {len_ep // 60}:{len_ep % 60} -- ")
-        print(f"I will finish in {len_ep * (opts.epochs - cur_epoch) // 60} minutes")
+        
+        if opts.output_aux and opts.model == 'bisenetv2':
+            print(f"End of Epoch {cur_epoch}/{opts.epochs}, Average Loss={epoch_loss[0] + epoch_loss[1]:.4f}, "
+                  f"Class Loss={epoch_loss[0]:.4f}, Boost Loss={epoch_loss[1]:.4f}, Reg Loss={epoch_loss[2]}\n"
+                  f"Train_Acc={train_score['Overall Acc']:.4f}, Train_Iou={train_score['Mean IoU']:.4f} "
+                  f"\n -- time: {len_ep // 60}:{len_ep % 60} -- ")
+            logger.add_scalar("E-Loss", epoch_loss[0] + epoch_loss[2], cur_epoch)
+            logger.add_scalar("E-Boost-Loss", epoch_loss[1], cur_epoch)
+        else:
+            print(f"End of Epoch {cur_epoch}/{opts.epochs}, Average Loss={epoch_loss[0] + epoch_loss[1]:.4f}, "
+                        f"Class Loss={epoch_loss[0]:.4f}, Reg Loss={epoch_loss[1]}\n"
+                        f"Train_Acc={train_score['Overall Acc']:.4f}, Train_Iou={train_score['Mean IoU']:.4f} "
+                        f"\n -- time: {len_ep // 60}:{len_ep % 60} -- ")
+            logger.add_scalar("E-Loss", epoch_loss[0] + epoch_loss[1], cur_epoch)
+            
+        print(f"I will finish in {len_ep * (opts.epochs - cur_epoch - 1) // 60} minutes")
 
-        logger.add_scalar("E-Loss", epoch_loss[0] + epoch_loss[1], cur_epoch)
         # logger.add_scalar("E-Loss-reg", epoch_loss[1], cur_epoch)
         # logger.add_scalar("E-Loss-cls", epoch_loss[0], cur_epoch)
 

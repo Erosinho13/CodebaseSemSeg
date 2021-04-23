@@ -41,31 +41,20 @@ def get_dataset(opts, train=True):
         if opts.model == 'bisenetv2':
             train_transform = Compose([
                 RandomHorizontalFlip(0.5),
-#                 ---PICK ONE---
-#                 Resize((512, 1024)),
-                RandomResizeRandomCrop(),
-#                 RandomResizedCrop((512, 1024), scale=(.5, 1), ratio=(2., 2.)),
-#                 --------------
+                RandomScaleRandomCrop(),
+                Resize((512, 1024)),
                 ToTensor(),
                 Normalize(mean=[0.485, 0.456, 0.406],
                           std=[0.229, 0.224, 0.225]),
             ])
             val_transform = Compose([
-#                 ---PICK ONE---
                 Resize((512, 1024)),
-#                 RandomResizeRandomCrop(),
-#                 RandomResizedCrop((512, 1024), scale=(.5, 1), ratio=(2., 2.)),
-#                 --------------
                 ToTensor(),
                 Normalize(mean=[0.485, 0.456, 0.406],
                           std=[0.229, 0.224, 0.225]),
             ])
             test_transform = Compose([
-#                 ---PICK ONE---
                 Resize((512, 1024)),
-#                 RandomResizeRandomCrop(),
-#                 RandomResizedCrop((512, 1024), scale=(.5, 1), ratio=(2., 2.)),
-#                 --------------
                 ToTensor(),
                 Normalize(mean=[0.485, 0.456, 0.406],
                           std=[0.229, 0.224, 0.225]),

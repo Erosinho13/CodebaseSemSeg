@@ -96,8 +96,8 @@ class PadCenterCrop(object):
 
     def __call__(self, img, lbl=None):
 
-        # pad the width if needed
         if lbl is None:
+            # pad the width if needed
             if self.pad_if_needed and img.size[0] < self.size[1]:
                 img = F.pad(img, (self.size[1] - img.size[0], 0), self.fill, self.padding_mode)
             # pad the height if needed
@@ -734,18 +734,28 @@ class ColorJitter(object):
         return format_string
     
 
-class RandomResizeRandomCrop(object):
+class RandomScaleRandomCrop(object):
 
-    def __init__(self, crop_size=(512, 1024), scale=(0.75, 1.0, 1.25, 1.5, 1.75, 2.0)):
+    def __init__(self, crop_size=(1024, 2048), scale=(0.75, 1.0, 1.25, 1.5, 1.75, 2.0)):
         self.crop_size = crop_size
         self.scale = scale
 
     def __call__(self, img, lbl=None):
+        
         scale = self.scale[(torch.ones(len(self.scale))/len(self.scale)).multinomial(num_samples=1)]
-        tr = Compose([
-            RandomScale((scale, scale)),
-            RandomCrop((512, 1024))
-        ])
+        
+        if scale<1:
+            tr = Compose([
+                RandomScale((scale, scale)),
+                PadCenterCrop((self.crop_size[0], self.crop_size[1]), fill=255)
+            ])
+        else:
+            tr = Compose([
+                RandomScale((scale, scale)),
+                RandomCrop(self.crop_size)
+            ])
+            
         if lbl is not None:
             return tr(img, lbl)
+        
         return tr(img)
